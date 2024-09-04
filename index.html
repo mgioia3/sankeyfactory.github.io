@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="icon" href="favicon.png">
+    <title>Sankeyfactory</title>
+    <meta name="description"
+        content="A tool for planning Satisfactory production chains with convenient sankey diagram view.">
+
+    <meta name="google-site-verification" content="6-iKZosunexSj2VovVivpB_LlNAOU_CANCVv5NiIjjY" />
+
+    <meta name="darkreader-lock">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="container">
+        <svg id="canvas">
+            <g id="viewport">
+                <g class="grid hidden">
+                    <defs>
+                        <pattern id="small-grid-pattern" width="20" height="20" patternUnits="userSpaceOnUse">
+                            <circle r="1" cx="10" cy="10" />
+                        </pattern>
+                        <pattern id="big-grid-pattern" width="100" height="100" patternUnits="userSpaceOnUse">
+                            <rect width="100" height="100" fill="url(#small-grid-pattern)" />
+                            <circle r="2" cx="10" cy="10" />
+                        </pattern>
+                    </defs>
+
+                    <rect x="-100" y="-100" width="0" height="0" fill="url(#big-grid-pattern)" />
+                </g>
+                <g class="links"> </g>
+                <g class="nodes"> </g>
+            </g>
+        </svg>
+
+        <div class="controls">
+            <div class="row zoom-controls">
+                <p id="ratio-display">Zoom: 1.0x</p>
+            </div>
+            <div class="row">
+                <div class="scroll-container">
+                    <div class="button hidden" id="cancel-linking" title="Cancel connecting nodes">
+                        <svg class="unlink_icon-placeholder"></svg>
+                    </div>
+                    <div class="button" id="open-help" title="Help">
+                        <svg class="question-mark_icon-placeholder"></svg>
+                    </div>
+                    <div class="button" id="clear-canvas" title="Clear canvas">
+                        <svg class="clear_icon-placeholder"></svg>
+                    </div>
+                    <div class="button toggle off" id="grid-toggle" title="Toggle grid">
+                        <svg class="off grid_icon-placeholder"></svg>
+                        <svg class="on disable-grid_icon-placeholder"></svg>
+                    </div>
+                    <div class="button toggle off" id="lock-viewport" title="Lock canvas">
+                        <svg class="off unlocked-lock_icon-placeholder"></svg>
+                        <svg class="on locked-lock_icon-placeholder"></svg>
+                    </div>
+                    <div class="button" id="create-node" title="Create node">
+                        <svg class="plus_icon-placeholder"></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="resources-summary" class="animate-collapsing">
+            <div class="content">
+                <div class="column inputs">
+                    <div class="title">Factory inputs</div>
+                </div>
+                <div class="column outputs">
+                    <div class="title">Factory outputs</div>
+                </div>
+            </div>
+            <div class="collapse-button button dimmed">
+                <svg class="chevron-up_icon-placeholder"></svg>
+                <div class="text when-collapsed">Expand summary</div>
+                <div class="text when-expanded">Collapse summary</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dimming hidden modal-window-container" id="node-creation-container">
+        <div id="node-creation-modal" class="modal-window">
+            <div class="title-row">
+                <h2 class="title">Select a recipe <span class="game-version"></span></h2>
+                <div class="close" id="node-creation-close">
+                    <svg class="cross_icon-placeholder"></svg>
+                </div>
+            </div>
+            <div class="search-container">
+                <div class="search-field">
+                    <input type="text" placeholder="Search recipes...">
+                    <div class="search-icon-container">
+                        <svg class="search_icon-placeholder"></svg>
+                    </div>
+                    <div class="clear-button">
+                        <svg class="cross_icon-placeholder"></svg>
+                    </div>
+                </div>
+                <div class="flags">
+                    <div class="title">Search by:</div>
+                    <div class="flag checked" id="recipe-names-flag">
+                        <div class="checkbox">
+                            <svg class="tick_icon-placeholder"></svg>
+                        </div>
+                        <div class="text">Recipe names</div>
+                    </div>
+                    <div class="flag" id="ingredients-flag">
+                        <div class="checkbox">
+                            <svg class="tick_icon-placeholder"></svg>
+                        </div>
+                        <div class="text">Ingredients</div>
+                    </div>
+                    <div class="flag checked" id="products-flag">
+                        <div class="checkbox">
+                            <svg class="tick_icon-placeholder"></svg>
+                        </div>
+                        <div class="text">Products</div>
+                    </div>
+                    <div class="flag" id="exact-match-flag">
+                        <div class="checkbox">
+                            <svg class="tick_icon-placeholder"></svg>
+                        </div>
+                        <div class="text">Exact match</div>
+                    </div>
+                </div>
+            </div>
+            <div class="columns">
+                <div class="content">
+                    <div id="recipe-tabs"> </div>
+                    <div class="tab-selectors-container">
+                        <div id="tab-selectors"> </div>
+                    </div>
+                </div>
+                <div id="selected-recipe" class="hidden">
+                    <div class="property" id="selected-recipe-name">
+                        <div class="title">Recipe name</div>
+                        <div class="text"></div>
+                    </div>
+                    <div class="property" id="selected-recipe-machine">
+                        <div class="title">Machine</div>
+                        <div class="machine">
+                            <img class="icon" alt="" />
+                        </div>
+                    </div>
+                    <div class="property" id="selected-recipe-input">
+                        <div class="title">Input per min</div>
+                        <div class="resource">
+                            <img class="icon" alt="" />
+                            <p class="amount"></p>
+                        </div>
+                    </div>
+                    <div class="property" id="selected-recipe-output">
+                        <div class="title">Output per min</div>
+                        <div class="resource">
+                            <img class="icon" alt="" />
+                            <p class="amount"></p>
+                        </div>
+                        <div class="resource">
+                            <img class="icon" alt="" />
+                            <p class="amount"></p>
+                        </div>
+                    </div>
+                    <div class="property" id="selected-recipe-power">
+                        <div class="title">Power</div>
+                        <div class="text"></div>
+                    </div>
+                    <div class="button dimmed" id="discard-recipe">Discard</div>
+                    <div class="button" id="confirm-recipe">Create node</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dimming modal-window-container hidden" id="machine-configuration-container">
+        <div class="modal-window">
+            <div class="title-row">
+                <h2 class="title">Node configuration</h2>
+                <div class="close">
+                    <svg class="cross_icon-placeholder"></svg>
+                </div>
+            </div>
+            <div class="content">
+                <div class="row">
+                    <h3 class="group-title">Machines amount</h3>
+                </div>
+                <div class="row">
+                    <div class="table amount">
+                        <div class="column machines">
+                            <div class="title">Machines</div>
+                        </div>
+                        <div class="column inputs">
+                            <div class="title">Input</div>
+                        </div>
+                        <div class="column outputs">
+                            <div class="title">Output</div>
+                        </div>
+                        <div class="column power">
+                            <div class="title">Power</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <h3 class="group-title">Overclock (every machine)</h3>
+                </div>
+                <div class="row">
+                    <div class="table overclock">
+                        <div class="column multipliers">
+                            <div class="title">Multiplier</div>
+                        </div>
+                        <div class="column inputs">
+                            <div class="title">Input</div>
+                        </div>
+                        <div class="column outputs">
+                            <div class="title">Output</div>
+                        </div>
+                        <div class="column power">
+                            <div class="title">Power</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row buttons">
+                <div class="button restore-button dimmed disabled">
+                    Restore
+                </div>
+                <div class="button apply-button">
+                    Apply
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dimming modal-window-container hidden" id="help-modal-container">
+        <div class="modal-window">
+            <div class="title-row">
+                <h2 class="title">Help <span class="background">&nbsp;&nbsp;&nbsp;&nbsp;(⩾﹏⩽)</span></h2>
+                <div class="close">
+                    <svg class="cross_icon-placeholder"></svg>
+                </div>
+            </div>
+            <div class="content">
+                <div class="social-links">
+                    <a href="https://buymeacoffee.com/andev0" target="_blank" class="social-link">
+                        <svg class="buy-me-a-coffee_icon-placeholder"></svg>
+                        <div>Buy me a coffee</div>
+                    </a>
+                    <a href="https://github.com/Sankeyfactory/sankeyfactory.github.io" target="_blank"
+                        class="social-link">
+                        <svg class="github_icon-placeholder"></svg>
+                        <div>View source code</div>
+                    </a>
+                </div>
+                <div class="row">
+                    <table>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Canvas</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Space|+|%mouse-drag%|$
+                                =Pan canvas=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse%&nbsp;Scroll&nbsp;|$
+                                =Pan vertically=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Shift|+|%mouse%&nbsp;Scroll&nbsp;|$
+                                =Pan horizontally=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Ctrl|+|%mouse%&nbsp;Scroll&nbsp;|$
+                                =Zoom=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|&nbsp;Double&nbsp;%mouse-left%|$
+                                =Create node=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-right%|$
+                                =Context menu=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|N|$
+                                =Create node=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|L|$
+                                =Toggle canvas locked=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Canvas (Mac)</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mac-command%|+|%mouse-drag%|$
+                                =Pan canvas=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Canvas (touchscreen or touchpad)</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%pinch%|$
+                                =Zoom=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Canvas (touchpad)</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%touchpad-two%|$
+                                =Pan canvas=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Canvas (touchscreen)</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%touch%|$
+                                =Simulates %mouse-left%=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|&nbsp;Long&nbsp;%touch%|$
+                                =Simulates %mouse-right%=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%touch-move%|$
+                                =Pan canvas=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%touch-move%|&nbsp;on a node&nbsp;$
+                                =Move node when %locked-lock%=
+                            </td>
+                        </tr>
+                    </table>
+                    <table>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Modal windows and context menus</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Esc|$
+                                =Close=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-left%| on dimming$
+                                =Close=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Nodes</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-drag%|&nbsp;on a node&nbsp;$
+                                =Move node=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-right%|&nbsp;on a node&nbsp;$
+                                =Context menu=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|&nbsp;Double&nbsp;%mouse-left%| on a node$
+                                =Node configuration=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Slots (green and red lines on nodes)</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-left%|&nbsp;on a slot&nbsp;$
+                                =Connect slot=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-right%|&nbsp;on a connected slot&nbsp;$
+                                =Context menu=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Connections</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-right%|&nbsp;on a connection&nbsp;$
+                                =Context menu=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Recipe selection</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-left%|&nbsp;on a recipe&nbsp;$
+                                =Select recipe=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-left%|&nbsp;on a selected recipe&nbsp;$
+                                =Discard recipe=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|&nbsp;Double&nbsp;%mouse-left%|&nbsp;on a recipe&nbsp;$
+                                =Instantly create node=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|%mouse-left%|&nbsp;on empty space&nbsp;$
+                                =Discard recipe=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Enter|$
+                                =Confirm selected recipe=
+                            </td>
+                        </tr>
+                        <tr>
+                            <th colspan="2" scope="rowgroup">Node configuration</th>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Enter| in input field$
+                                =Confirm input=
+                            </td>
+                        </tr>
+                        <tr class="help-placeholder">
+                            <td>
+                                $|Enter|$
+                                =Apply configuration=
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-context-menu-container" class="context-menu-container hidden">
+        <div class="context-menu">
+            <div class="option hidden" id="node-from-link-option">
+                <svg class="plus_icon-placeholder"></svg>
+                <div class="text">Create suitable node</div>
+            </div>
+            <div class="option hidden" id="cancel-linking-option">
+                <svg class="unlink_icon-placeholder"></svg>
+                <div class="text">Cancel connecting nodes</div>
+            </div>
+            <div class="option" id="create-node-option">
+                <svg class="plus_icon-placeholder"></svg>
+                <div class="text">Create node</div>
+            </div>
+            <div class="switch" id="lock-canvas-switch">
+                <div class="option when-enabled">
+                    <svg class="locked-lock_icon-placeholder"></svg>
+                    <div class="text">Unlock canvas</div>
+                </div>
+                <div class="option when-disabled">
+                    <svg class="unlocked-lock_icon-placeholder"></svg>
+                    <div class="text">Lock canvas</div>
+                </div>
+            </div>
+            <div class="switch" id="toggle-grid-switch">
+                <div class="option when-enabled">
+                    <svg class="disable-grid_icon-placeholder"></svg>
+                    <div class="text">Disable grid</div>
+                </div>
+                <div class="option when-disabled">
+                    <svg class="grid_icon-placeholder"></svg>
+                    <div class="text">Enable grid</div>
+                </div>
+            </div>
+            <div class="option" id="clear-canvas-option">
+                <svg class="clear_icon-placeholder"></svg>
+                <div class="text">Clear canvas</div>
+            </div>
+            <div class="option" id="show-help-option">
+                <svg class="question-mark_icon-placeholder"></svg>
+                <div class="text">Show help</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="node-context-menu-container" class="context-menu-container hidden">
+        <div class="context-menu">
+            <div class="option" id="delete-node-option">
+                <svg class="trash_icon-placeholder"></svg>
+                <div class="text">Delete node</div>
+            </div>
+            <div class="option" id="configure-node-option">
+                <svg class="configuration_icon-placeholder"></svg>
+                <div class="text">Configure</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="link-context-menu-container" class="context-menu-container hidden">
+        <div class="context-menu">
+            <div class="option" id="delete-link-option">
+                <svg class="trash_icon-placeholder"></svg>
+                <div class="text">Remove connection</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+
+</html>
